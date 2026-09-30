@@ -1,0 +1,205 @@
+name: Build K230 firmware for D200C2409V0 panel
+
+# 为立创·庐山派(LCKFB) + 2.0" 480x640 D200C2409V0 面板编译固件
+# 源: kendryte/canmv_k230 的 build_manual.yml 改造
+# 关键: (1) 固定 v1.8 manifest (2) HTTPS 免 SSH (3) 只编 lckfb (4) 打面板补丁
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # 补丁写到 /tmp —— 下面 rm -rf * 会清空工作区
+      - name: Write panel patch
+        run: |
+          cat > /tmp/panel.patch <<'PATCH_EOF'
+          --- a/src/rtsmart/mpp/kernel/connector/src/panels/mipi_st7701.c
+          +++ b/src/rtsmart/mpp/kernel/connector/src/panels/mipi_st7701.c
+          @@ -236,6 +236,67 @@
+           
+               return dsi_send_cmd_sequence(desc, init_sequence, sizeof(init_sequence), 0);
+           }
+          +
+          +#if defined(CONFIG_BOARD_K230_CANMV_LCKFB) || defined (CONFIG_BOARD_K230D_CANMV_LUSHANPI_LITE)
+          +/* 2.0" 480x640 D200C2409V0 (ST7701S)
+          + * 依据屏厂 D200C2409V0 SPEC / ST7701S SPEC / 泰山派 rk3566 dtsi
+          + * 时序 21MHz, htotal=502, vtotal=702 ≈59.6fps
+          + */
+          +static int st7701_480x640_d200_init(const struct panel_desc* desc)
+          +{
+          +    /* clang-format off */
+          +    const k_u8 init_sequence[] = {
+          +        // cmd type, delay, data length, data0 ... dataN
+          +        0x15,120, 2, 0x01, 0x00,
+          +        0x39, 0, 6, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x13,
+          +        0x15, 0, 2, 0xEF, 0x08,
+          +        0x39, 0, 6, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10,
+          +        0x39, 0, 3, 0xC0, 0x4F, 0x00,
+          +        0x39, 0, 3, 0xC1, 0x11, 0x0C,
+          +        0x39, 0, 3, 0xC2, 0x07, 0x0A,
+          +        0x39, 0, 4, 0xC3, 0x83, 0x33, 0x1B,
+          +        0x15, 0, 2, 0xCC, 0x10,
+          +        0x39, 0,17, 0xB0, 0x00, 0x0F, 0x18, 0x0D, 0x12, 0x07, 0x05, 0x08, 0x07, 0x21, 0x03, 0x10, 0x0F, 0x26, 0x2F, 0x1F,
+          +        0x39, 0,17, 0xB1, 0x00, 0x1B, 0x20, 0x0C, 0x0E, 0x03, 0x08, 0x08, 0x08, 0x22, 0x05, 0x11, 0x0F, 0x2A, 0x32, 0x1F,
+          +        0x39, 0, 6, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x11,
+          +        0x15, 0, 2, 0xB0, 0x35,
+          +        0x15, 0, 2, 0xB1, 0x6A,
+          +        0x15, 0, 2, 0xB2, 0x81,
+          +        0x15, 0, 2, 0xB3, 0x80,
+          +        0x15, 0, 2, 0xB5, 0x4E,
+          +        0x15, 0, 2, 0xB7, 0x85,
+          +        0x15, 0, 2, 0xB8, 0x21,
+          +        0x15, 0, 2, 0xC0, 0x09,
+          +        0x15, 0, 2, 0xC1, 0x78,
+          +        0x15, 0, 2, 0xC2, 0x78,
+          +        0x15, 0, 2, 0xD0, 0x88,
+          +        0x39, 0, 4, 0xE0, 0x00, 0xA0, 0x02,
+          +        0x39, 0,12, 0xE1, 0x06, 0xA0, 0x08, 0xA0, 0x05, 0xA0, 0x07, 0xA0, 0x00, 0x44, 0x44,
+          +        0x39, 0,14, 0xE2, 0x20, 0x20, 0x40, 0x40, 0x96, 0xA0, 0x00, 0x00, 0x96, 0xA0, 0x00, 0x00, 0x00,
+          +        0x39, 0, 5, 0xE3, 0x00, 0x00, 0x22, 0x22,
+          +        0x39, 0, 3, 0xE4, 0x44, 0x44,
+          +        0x39, 0,17, 0xE5, 0x0E, 0x97, 0x10, 0xA0, 0x10, 0x99, 0x10, 0xA0, 0x0A, 0x93, 0x10, 0xA0, 0x0C, 0x95, 0x10, 0xA0,
+          +        0x39, 0, 5, 0xE6, 0x00, 0x00, 0x22, 0x22,
+          +        0x39, 0, 3, 0xE7, 0x44, 0x44,
+          +        0x39, 0,17, 0xE8, 0x0D, 0x96, 0x10, 0xA0, 0x0F, 0x98, 0x10, 0xA0, 0x09, 0x92, 0x10, 0xA0, 0x0B, 0x94, 0x10, 0xA0,
+          +        0x39, 0, 8, 0xEB, 0x00, 0x01, 0x4E, 0x4E, 0x44, 0x88, 0x40,
+          +        0x39, 0, 3, 0xEC, 0x78, 0x00,
+          +        0x39, 0,17, 0xED, 0xFF, 0xFA, 0x2F, 0x89, 0x76, 0x54, 0x01, 0xFF, 0xFF, 0x10, 0x45, 0x67, 0x98, 0xF2, 0xAF, 0xFF,
+          +        0x39, 0, 7, 0xEF, 0x08, 0x08, 0x08, 0x45, 0x3F, 0x54,
+          +        0x39, 0, 6, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x13,
+          +        0x39, 0, 3, 0xE8, 0x00, 0x0E,
+          +        0x39,20, 3, 0xE8, 0x00, 0x0C,
+          +        0x39, 0, 3, 0xE8, 0x00, 0x00,
+          +        0x39, 0, 6, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x00,
+          +        0x15,120, 2, 0x11, 0x00,
+          +        0x15, 0, 2, 0x3A, 0x70, // 0x50:565, 0x60:666, 0x70:888
+          +        0x15,20, 2, 0x29, 0x00,
+          +    };
+          +    /* clang-format on */
+          +
+          +    return dsi_send_cmd_sequence(desc, init_sequence, sizeof(init_sequence), 0);
+          +}
+          +#endif
+           
+           #if defined(CONFIG_BOARD_K230D_CANMV_ATK_DNK230D)
+           static int st7701_480x640_atk_init(const struct panel_desc* desc)
+          @@ -663,6 +724,54 @@
+           };
+           #endif
+           
+          +#if defined(CONFIG_BOARD_K230_CANMV_LCKFB) || defined (CONFIG_BOARD_K230D_CANMV_LUSHANPI_LITE)
+          +static const struct panel_ops st7701_480x640_d200_ops = {
+          +    .reset        = panel_generic_reset,
+          +    .init         = st7701_480x640_d200_init,
+          +    .power_off    = st7701_power_off,
+          +    .read_chip_id = dsi_read_chip_id,
+          +};
+          +
+          +static const struct panel_desc st7701_480x640_d200_panel_desc = {
+          +    .name = "st7701_480x640_d200",
+          +    .connector_type = ST7701_480_640_DSI_V1,
+          +    .bus_type = PANEL_BUS_DSI,
+          +
+          +    .timing = {
+          +        .pclk_khz      = 21000,
+          +        .hactive       = 480,
+          +        .hsync_len     = 2,
+          +        .hback_porch   = 10,
+          +        .hfront_porch  = 10,
+          +        .vactive       = 640,
+          +        .vsync_len     = 2,
+          +        .vback_porch   = 30,
+          +        .vfront_porch  = 30,
+          +    },
+          +
+          +    .bg_color = PANEL_BG_COLOR_BLACK,
+          +
+          +    .gpio = {
+          +        .reset_pin = CONFIG_MPP_DSI_LCD_RESET_PIN,
+          +        .backlight_pin = CONFIG_MPP_DSI_LCD_BACKLIGHT_PIN,
+          +        .reset_delay_ms = 10,
+          +        .backlight_delay_ms = 0,
+          +        .reset_active_low = K_TRUE,
+          +        .backlight_active_low = K_FALSE,
+          +    },
+          +
+          +    .bus.dsi = {
+          +        .lanes = K_DSI_2LANE,
+          +        .cmd_mode = K_DSI_CMD_LP_MODE,
+          +        .video_mode = K_DSI_VIDEO_BURST_MODE,
+          +        .vc_id = 0,
+          +    },
+          +
+          +    .bus_ops = &dsi_bus_ops,
+          +    .ops = &st7701_480x640_d200_ops,
+          +};
+          +#endif
+          +
+           static const struct panel_desc st7701_480x640_panel_desc = {
+               .name = "st7701_480x640",
+               .connector_type = ST7701_480_640_DSI_V1,
+          @@ -883,6 +992,8 @@
+               &st7701_480x640_yahboom_panel_desc,
+           #elif defined(CONFIG_BOARD_K230_CANMV_MRT)
+               &st7701_480x640_mrt_panel_desc,
+          +#elif defined(CONFIG_BOARD_K230_CANMV_LCKFB) || defined (CONFIG_BOARD_K230D_CANMV_LUSHANPI_LITE)
+          +    &st7701_480x640_d200_panel_desc,
+           #else
+               &st7701_480x640_panel_desc,
+           #endif
+          PATCH_EOF
+          echo "patch lines: $(wc -l < /tmp/panel.patch)"
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/.bin/
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod +x ~/.bin/repo
+
+      - name: Prepare code (v1.8 manifest)
+        run: |
+          rm -rf ./*
+          ~/.bin/repo init -u https://github.com/canmv-k230/manifest -b master             -m canmv_v1.8.xml             --repo-url=https://github.com/canmv-k230/git-repo.git
+          ~/.bin/repo sync -j$(nproc)
+
+      - name: Apply panel patch
+        run: |
+          set -e
+          TARGET=src/rtsmart/mpp/kernel/connector/src/panels/mipi_st7701.c
+          test -f "$TARGET"
+          patch -p1 -i /tmp/panel.patch
+          grep -n "480x640_d200" "$TARGET"
+
+      - name: Prepare build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bison flex gcc libncurses5-dev pkg-config             libconfuse-dev libssl-dev python3 python3-pip python-is-python3 python3-venv             cmake libyaml-dev scons mtools bzip2
+          python3 -m venv ~/.canmv_venv
+          source ~/.canmv_venv/bin/activate
+          pip3 install pycryptodome gmssl jsonschema jinja2
+
+      - name: Download toolchains
+        run: make dl_toolchain
+
+      - name: Build (LCKFB only)
+        run: |
+          source ~/.canmv_venv/bin/activate
+          make k230_canmv_lckfb_defconfig
+          make -j$(nproc)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: k230_canmv_lckfb_D200C2409V0
+          path: |
+            **/*.img
+            **/*.img.gz
+          if-no-files-found: warn
