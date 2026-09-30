@@ -6,6 +6,10 @@ name: Build K230 firmware for D200C2409V0 panel
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ d200-panel ]
+    paths:
+      - '.github/workflows/build_d200.yml'
 
 jobs:
   build:
@@ -188,6 +192,35 @@ jobs:
 
       - name: Download toolchains
         run: make dl_toolchain
+
+      - name: Enable FT6336GU touch in defconfig (I2C3 / INT=IO23 / RST=IO24)
+        run: |
+          cat >> configs/k230_canmv_lckfb_defconfig <<'TOUCH_EOF'
+
+          # ---- 2.0" D200C2409V0 touch: FT6336GU (FocalTech, ft5316 driver) ----
+          # 引脚依据: 庐山派原理图 2.11/2.12 + SDK defconfig
+          #   TP_SCL = I2C3_SCL = HDMI_CSCL = IO36
+          #   TP_SDA = I2C3_SDA = HDMI_CSDA = IO37
+          #   TP_RST = HDMI_RSTN = IO24
+          #   TP_INT = HDMI_INT  = IO23
+          CONFIG_RT_USING_TOUCH=y
+          CONFIG_TOUCH_TYPE_FT5316=y
+          CONFIG_TOUCH_FT5316_DFT_RANGE_X=480
+          CONFIG_TOUCH_FT5316_DFT_RANGE_Y=640
+          CONFIG_TOUCH_DEFAULT_DEVICE=y
+          CONFIG_TOUCH_DEV_INT_PIN=23
+          CONFIG_TOUCH_DEV_INT_EDGE_FALLING=y
+          CONFIG_TOUCH_DEV_RST_PIN=24
+          CONFIG_TOUCH_DEV_RST_PIN_VALID_VALUE=0
+          CONFIG_TOUCH_DEV_I2C_BUS_3=y
+          CONFIG_TOUCH_DEV_I2C_BUS_SPEED=400000
+          CONFIG_TOUCH_RANGE_X=480
+          CONFIG_TOUCH_RANGE_Y=640
+          TOUCH_EOF
+          echo "--- appended touch config, defconfig tail: ---"
+          tail -24 configs/k230_canmv_lckfb_defconfig
+          echo "--- verify symbols ---"
+          grep -E "RT_USING_TOUCH|TOUCH_TYPE|TOUCH_DEV_|TOUCH_RANGE" configs/k230_canmv_lckfb_defconfig
 
       - name: Build (LCKFB only)
         run: |
