@@ -211,6 +211,15 @@ jobs:
           echo "--- after ---"
           grep -nE "TOUCH_TYPE|TOUCH_.*RANGE|TOUCH_DEV" $KD
 
+      - name: Relax FT5316 vendor-ID gate in kernel driver
+        run: |
+          F=src/rtsmart/rtsmart/kernel/bsp/maix3/drivers/extdrv/touch/ft5316.c
+          echo "return -2 count before: $(grep -c 'return -2;' $F)"
+          sed -i 's|return -2;|LOG_W("ft5x16: unexpected vendor 0x%02x, continue anyway", vendor);|' $F
+          echo "return -2 count after: $(grep -c 'return -2;' $F)"
+          echo "--- patched probe ---"
+          grep -n -A4 "VENDOR_ID_COMPAT != vendor" $F
+
       - name: Enable FT6336GU touch in defconfig (I2C3 / INT=IO23 / RST=IO24)
         run: |
           cat >> configs/k230_canmv_lckfb_defconfig <<'TOUCH_EOF'
