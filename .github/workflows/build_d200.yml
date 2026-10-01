@@ -193,6 +193,24 @@ jobs:
       - name: Download toolchains
         run: make dl_toolchain
 
+      - name: Use FocalTech FT5316 touch driver in kernel defconfig
+        run: |
+          KD=src/rtsmart/rtsmart/kernel/bsp/maix3/configs/k230_canmv_lckfb_defconfig
+          echo "--- before ---"
+          grep -nE "TOUCH_TYPE|TOUCH_.*RANGE|TOUCH_DEV" $KD || true
+          # 1) 关掉 cst128（对 FT6336 只"寄存器兼容"，实测读出垃圾坐标且中断只来一次）
+          sed -i 's/^CONFIG_TOUCH_TYPE_CST128=y$/# CONFIG_TOUCH_TYPE_CST128 is not set/' $KD
+          # 2) 启用 FocalTech FT5316 驱动（FT6336GU 属 FT5x16/FT6x36 同族）
+          cat >> $KD <<'TOUCH_EOF'
+          CONFIG_TOUCH_TYPE_FT5316=y
+          CONFIG_TOUCH_FT5316_DFT_RANGE_X=480
+          CONFIG_TOUCH_FT5316_DFT_RANGE_Y=640
+          CONFIG_TOUCH_RANGE_X=480
+          CONFIG_TOUCH_RANGE_Y=640
+          TOUCH_EOF
+          echo "--- after ---"
+          grep -nE "TOUCH_TYPE|TOUCH_.*RANGE|TOUCH_DEV" $KD
+
       - name: Enable FT6336GU touch in defconfig (I2C3 / INT=IO23 / RST=IO24)
         run: |
           cat >> configs/k230_canmv_lckfb_defconfig <<'TOUCH_EOF'
