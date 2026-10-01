@@ -218,7 +218,13 @@ jobs:
           sed -i 's|return -2;|LOG_W("ft5x16: unexpected vendor 0x%02x, continue anyway", vendor);|' $F
           echo "return -2 count after: $(grep -c 'return -2;' $F)"
           echo "--- patched probe ---"
-          grep -n -A4 "VENDOR_ID_COMPAT != vendor" $F
+          sed -n '155,162p' $F
+          if grep -q "unexpected vendor" $F; then
+            echo "PATCH OK: vendor gate relaxed"
+          else
+            echo "PATCH MISSING"
+            exit 1
+          fi
 
       - name: Enable FT6336GU touch in defconfig (I2C3 / INT=IO23 / RST=IO24)
         run: |
