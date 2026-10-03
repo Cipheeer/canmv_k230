@@ -182,6 +182,42 @@ jobs:
           patch -p1 -i /tmp/panel.patch
           grep -n "480x640_d200" "$TARGET"
 
+      - name: Diagnose + disable rotated-panel single OSD buffer (D200)
+        run: |
+          set -e
+          F=src/canmv/port/modules/modmedia.display.c
+          OUT="$GITHUB_WORKSPACE/diag_rotated.txt"
+          test -f "$F"
+          {
+            echo "===== file identity ====="
+            echo -n "bytes: "; wc -c < "$F"
+            echo -n "lines: "; wc -l < "$F"
+            md5sum "$F"
+            echo
+            echo "===== occurrences ====="
+            grep -n "py_display_is_panel_rotated" "$F" || echo "NO py_display_is_panel_rotated"
+            grep -n "share_buffer" "$F" || echo "NO share_buffer"
+            grep -n "one osd buffer" "$F" || echo "NO printf text (panel is rotated ...)"
+            echo
+            echo "===== is_panel_rotated body ====="
+            sed -n '/static int py_display_is_panel_rotated/,/^}/p' "$F" || true
+            echo
+            echo "===== osd pool / osd_num ====="
+            grep -n "extra_osd_num\|arg_osd_num\|osd_layer_vb_pool_id = " "$F" || true
+          } | tee "$OUT"
+          python3 - "$F" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          old = "int rotated = py_display_is_panel_rotated(panel_map.type);"
+          if old not in s:
+              print("FATAL: call site not found -> this canmv revision has no rotated logic, plan B N/A")
+              sys.exit(1)
+          open(p, "w").write(s.replace(old, "int rotated = 0; /* D200: force per-layer OSD buffers */"))
+          print("PATCHED: rotated forced to 0")
+          PY
+          { echo; echo "===== after patch ====="; grep -n "int rotated" "$F"; } | tee -a "$OUT"
+
       - name: Prepare build environment
         run: |
           sudo apt-get update
@@ -280,3 +316,31 @@ jobs:
             **/*.img
             **/*.img.gz
           if-no-files-found: warn
+
+      - name: Publish CI notes to branch ci-logs
+        if: always()
+        run: |
+          set -x
+          rm -rf /tmp/notes && mkdir -p /tmp/notes && cd /tmp/notes
+          if [ -f "$GITHUB_WORKSPACE/diag_rotated.txt" ]; then
+            cp "$GITHUB_WORKSPACE/diag_rotated.txt" .
+          else
+            echo "diag step did not run" > diag_rotated.txt
+          fi
+          {
+            echo "run_id  = $GITHUB_RUN_ID"
+            echo "sha     = $GITHUB_SHA"
+            echo "ref     = $GITHUB_REF"
+            echo "status  = ${{ job.status }}"
+            echo -n "date    = "; date -u
+            echo "--- images built ---"
+            find "$GITHUB_WORKSPACE" -name '*.img' -o -name '*.img.gz' 2>/dev/null | head -20
+            find "$GITHUB_WORKSPACE" -name '*.img*' -printf '%p %s bytes\n' 2>/dev/null | head -20
+          } > status.txt
+          git init -q -b ci-logs
+          git config user.email "ci@dsh.local"
+          git config user.name "dsh-ci"
+          git add -A
+          git commit -qm "ci notes run $GITHUB_RUN_ID"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push -f origin ci-logs
