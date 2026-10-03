@@ -1,0 +1,18 @@
+run_id  = 37136994968
+sha     = ed99e4b0acacef61a5b491daa693d357c80a1a11
+ref     = refs/heads/d200-panel
+status  = success
+date    = Sat Oct  3 16:34:56 UTC 2026
+--- images built ---
+/home/runner/work/canmv_k230/canmv_k230/output/k230_canmv_lckfb_defconfig/CanMV_K230_LCKFB_micropython_v1.8-0-gc2d1f5c-dirty_nncase_v2.11.0.img.gz
+/home/runner/work/canmv_k230/canmv_k230/output/k230_canmv_lckfb_defconfig/CanMV_K230_LCKFB_micropython_v1.8-0-gc2d1f5c-dirty_nncase_v2.11.0.img
+/home/runner/work/canmv_k230/canmv_k230/src/rtsmart/rtsmart/tools/ext4disk/partition.img
+/home/runner/work/canmv_k230/canmv_k230/src/rtsmart/rtsmart/tools/ext4disk/gptext4_partition.img
+/home/runner/work/canmv_k230/canmv_k230/src/rtsmart/rtsmart/tools/fatdisk/gptfat_partition.img
+/home/runner/work/canmv_k230/canmv_k230/output/k230_canmv_lckfb_defconfig/CanMV_K230_LCKFB_micropython_v1.8-0-gc2d1f5c-dirty_nncase_v2.11.0.img.gz 306509266 bytes
+/home/runner/work/canmv_k230/canmv_k230/output/k230_canmv_lckfb_defconfig/CanMV_K230_LCKFB_micropython_v1.8-0-gc2d1f5c-dirty_nncase_v2.11.0.img 650117120 bytes
+/home/runner/work/canmv_k230/canmv_k230/output/k230_canmv_lckfb_defconfig/CanMV_K230_LCKFB_micropython_v1.8-0-gc2d1f5c-dirty_nncase_v2.11.0.img.gz.md5 361 bytes
+/home/runner/work/canmv_k230/canmv_k230/src/uboot/uboot/test/py/tests/bootstd/mmc1.img.xz 4448 bytes
+/home/runner/work/canmv_k230/canmv_k230/src/rtsmart/rtsmart/tools/ext4disk/partition.img 32768 bytes
+/home/runner/work/canmv_k230/canmv_k230/src/rtsmart/rtsmart/tools/ext4disk/gptext4_partition.img 32768 bytes
+/home/runner/work/canmv_k230/canmv_k230/src/rtsmart/rtsmart/tools/fatdisk/gptfat_partition.img 32768 bytes

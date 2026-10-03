@@ -1,0 +1,71 @@
+===== file identity =====
+bytes: 58486
+lines: 1768
+ef030cdb5c18a9e40c80c560b2511898  src/canmv/port/modules/modmedia.display.c
+
+===== occurrences =====
+283:static int py_display_is_panel_rotated(k_connector_type type)
+1018:    int rotated = py_display_is_panel_rotated(panel_map.type);
+390:    py_display_buffer_t share_buffer;
+403:    .share_buffer = { .valid = 0 },
+716:        py_display_free_single_buffer(&py_display_inst.share_buffer);
+1521:        buffer = &py_display_inst.share_buffer;
+1021:        printf("panel is rotated, we only need one osd buffer\n");
+
+===== is_panel_rotated body =====
+static int py_display_is_panel_rotated(k_connector_type type)
+{
+    k_u32 vo_width, vo_height;
+    int   panel_width, panel_height;
+
+    if (0x00 != py_display_get_connector_resolution(type, &panel_width, &panel_height)) {
+        return -1;
+    }
+
+    if (0x00 != kd_display_get_resolution(&vo_width, &vo_height)) {
+        return -1;
+    }
+
+    if ((panel_width == vo_width) && (panel_height == vo_height)) {
+        return 0;
+    }
+
+    return 1;
+}
+
+===== osd pool / osd_num =====
+401:    .osd_layer_vb_pool_id = VB_INVALID_POOLID,
+722:        py_display_inst.osd_layer_vb_pool_id = VB_INVALID_POOLID;
+752:        int extra_osd_num = 2;
+755:            extra_osd_num = 0;
+757:        k_s32 osd_layer_vb_pool_id = kd_mpi_vb_create_pool_ex(buffer_size, osd_num + extra_osd_num, VB_REMAP_MODE_CACHED);
+765:        py_display_inst.osd_layer_vb_pool_id = osd_layer_vb_pool_id;
+1016:    int arg_osd_num = args[ARG_osd_num].u_int;
+1023:        if (arg_osd_num) {
+1024:            arg_osd_num = 1;
+1031:    if (0x00 != py_display_init_inst(rotated, arg_osd_num, arg_enable_wbc, arg_wbc_quality)) {
+
+===== after patch =====
+static int py_display_is_panel_rotated(k_connector_type type)
+{
+    k_u32 vo_width, vo_height;
+    int   panel_width, panel_height;
+
+    if (0x00 != py_display_get_connector_resolution(type, &panel_width, &panel_height)) {
+        return -1;
+    }
+
+    if (0x00 != kd_display_get_resolution(&vo_width, &vo_height)) {
+        return -1;
+    }
+
+    /* D200 patch: panel(480x640) != VO(640x480) upstream forces a single shared
+       OSD buffer (see the 'panel is rotated' printf + share_buffer path),
+       which kills the 4-layer composition. Force rotated = 0 to keep one
+       buffer per layer (same behaviour as the factory v1.4-generation fw). */
+    if ((panel_width == vo_width) && (panel_height == vo_height)) {
+        return 0;
+    }
+
+    return 0;
+}
