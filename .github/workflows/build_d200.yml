@@ -235,6 +235,74 @@ jobs:
           PY
           { echo; echo "===== after patch ====="; sed -n '/static int py_display_is_panel_rotated/,/^}/p' "$F"; } | tee -a "$OUT"
 
+
+      - name: Reuse OSD layer buffer instead of free+alloc per frame (D200 leak fix)
+        run: |
+          set -e
+          F=src/canmv/port/modules/modmedia.display.c
+          echo "=== before: per-layer show_image block ==="
+          grep -n "py_display_inst.rotated" -A 6 "$F" | head -20 || true
+          python3 - "$F" <<'PY'
+          import sys
+          p = sys.argv[1]
+          data = open(p, 'rb').read()
+          data = data.replace(b'\r\n', b'\n')
+          OLD = (
+              b"        if (!py_display_inst.rotated) {\n"
+              b"            py_display_buffer_t* old_buffer = &py_display_inst.layer_buffer[arg_layer];\n"
+              b"\n"
+              b"            py_display_free_single_buffer(old_buffer);\n"
+              b"            hal_rvv_memcpy(old_buffer, buffer, sizeof(py_display_buffer_t));\n"
+              b"        }\n"
+          )
+          NEW = (
+              b"        if (!py_display_inst.rotated) {\n"
+              b"            py_display_buffer_t* old_buffer = &py_display_inst.layer_buffer[arg_layer];\n"
+              b"\n"
+              b"            /* D200 fix: REUSE the in-use layer buffer (no free/alloc per frame).\n"
+              b"               Stock code frees+reallocates the layer buffer on EVERY show_image while\n"
+              b"               the VO may still scan it out -> use-after-free -> hard reset (~600 frames). */\n"
+              b"            if ((0x00 != old_buffer->valid)\n"
+              b"                && (VB_INVALID_HANDLE != old_buffer->block_handle)\n"
+              b"                && (NULL != old_buffer->buffer_addr)\n"
+              b"                && (old_buffer->buffer_size == buffer->buffer_size)\n"
+              b"                && (old_buffer->buffer_pool_id == buffer->buffer_pool_id)) {\n"
+              b"                k_u32 _keep_handle = old_buffer->block_handle;\n"
+              b"                void* _keep_addr = old_buffer->buffer_addr;\n"
+              b"                k_s32 _keep_pool = old_buffer->buffer_pool_id;\n"
+              b"                k_u32 _keep_size = old_buffer->buffer_size;\n"
+              b"                k_u64 _keep_phys = old_buffer->vf_info.v_frame.phys_addr[0];\n"
+              b"\n"
+              b"                if (NULL != buffer->buffer_addr) {\n"
+              b"                    hal_rvv_memcpy(_keep_addr, buffer->buffer_addr, buffer->buffer_size);\n"
+              b"                }\n"
+              b"                hal_rvv_memcpy(old_buffer, buffer, sizeof(py_display_buffer_t));\n"
+              b"                old_buffer->block_handle = _keep_handle;\n"
+              b"                old_buffer->buffer_addr = _keep_addr;\n"
+              b"                old_buffer->buffer_pool_id = _keep_pool;\n"
+              b"                old_buffer->buffer_size = _keep_size;\n"
+              b"                old_buffer->vf_info.v_frame.phys_addr[0] = _keep_phys;\n"
+              b"                old_buffer->valid = 1;\n"
+              b"\n"
+              b"                py_display_free_single_buffer(buffer);\n"
+              b"            } else {\n"
+              b"                py_display_free_single_buffer(old_buffer);\n"
+              b"                hal_rvv_memcpy(old_buffer, buffer, sizeof(py_display_buffer_t));\n"
+              b"            }\n"
+              b"        }\n"
+          )
+          n = data.count(OLD)
+          print("matches =", n)
+          if n != 1:
+              print("EXPECTED exactly 1 match, aborting")
+              sys.exit(1)
+          data = data.replace(OLD, NEW, 1)
+          open(p, 'wb').write(data)
+          print("PATCHED: per-layer show_image now reuses the layer buffer")
+          PY
+          echo "=== after: patched block ==="
+          grep -n "D200 fix: REUSE" -A 30 "$F" | head -40 || true
+
       - name: Prepare build environment
         run: |
           sudo apt-get update
