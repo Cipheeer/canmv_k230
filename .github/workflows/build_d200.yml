@@ -208,15 +208,32 @@ jobs:
           python3 - "$F" <<'PY'
           import sys
           p = sys.argv[1]
-          s = open(p).read()
-          old = "int rotated = py_display_is_panel_rotated(panel_map.type);"
-          if old not in s:
-              print("FATAL: call site not found -> this canmv revision has no rotated logic, plan B N/A")
+          b = open(p, 'rb').read()          # 字节级操作：源文件可能不是 UTF-8
+          # 注意：只能改函数自身的返回值。改调用点会让该 static 函数变成 unused，
+          # 而本工程开了 -Werror，会以 'defined but not used [-Werror=unused-function]' 失败。
+          old = (b"    if ((panel_width == vo_width) && (panel_height == vo_height)) {\n"
+                 b"        return 0;\n"
+                 b"    }\n"
+                 b"\n"
+                 b"    return 1;\n"
+                 b"}")
+          new = ("    /* D200 patch: panel(480x640) != VO(640x480) upstream forces a single shared\n"
+                 "       OSD buffer (see the 'panel is rotated' printf + share_buffer path),\n"
+                 "       which kills the 4-layer composition. Force rotated = 0 to keep one\n"
+                 "       buffer per layer (same behaviour as the factory v1.4-generation fw). */\n"
+                 "    if ((panel_width == vo_width) && (panel_height == vo_height)) {\n"
+                 "        return 0;\n"
+                 "    }\n"
+                 "\n"
+                 "    return 0;\n"
+                 "}").encode("utf-8")
+          if old not in b:
+              print("FATAL: is_panel_rotated body not matched -> source differs, stop here")
               sys.exit(1)
-          open(p, "w").write(s.replace(old, "int rotated = 0; /* D200: force per-layer OSD buffers */"))
-          print("PATCHED: rotated forced to 0")
+          open(p, 'wb').write(b.replace(old, new, 1))
+          print("PATCHED: py_display_is_panel_rotated() now always returns 0")
           PY
-          { echo; echo "===== after patch ====="; grep -n "int rotated" "$F"; } | tee -a "$OUT"
+          { echo; echo "===== after patch ====="; sed -n '/static int py_display_is_panel_rotated/,/^}/p' "$F"; } | tee -a "$OUT"
 
       - name: Prepare build environment
         run: |
